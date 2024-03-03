@@ -42,7 +42,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 {
     public override string ModuleName => "ServersList";
     public override string ModuleAuthor => "NyggaBytes";
-    public override string ModuleVersion => "1.0.1";
+    public override string ModuleVersion => "1.0.2";
     public ServersListConfig Config { get; set; } = new();
     
     public int serverIdentifier = 0;
@@ -66,6 +66,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 
     #region Commands
     [ConsoleCommand("css_servers", "HSMANIA.net Servers list.")]
+    [ConsoleCommand("css_serwery", "HSMANIA.net Servers list.")]
     [CommandHelper(minArgs: 0, usage: "<NAME>", whoCanExecute: CommandUsage.CLIENT_ONLY)]
     public void OnServersCommand(CCSPlayerController? player, CommandInfo command)
     {
