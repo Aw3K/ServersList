@@ -1,3 +1,9 @@
 {
-  "DatabaseError": " [\u0004ServersList\u0001] \u0007Błąd podczas łączenia się z bazą danych."
+  "DatabaseError": " [\u0004ServersList\u0001] \u0007Błąd podczas łączenia się z bazą danych.",
+  "DatabaseErrList": " Nie można zczytać statusu.",
+  "NotFoundAny": "\u0020\u0007Nie znaleziono żadnych pasujących serwerów.",
+  "CurrentPlaying": " Gracze",
+  "ConnectWith": " Chcesz dołączyć? Wpisz \u0004connect {0}\u0001 w konsoli\u0004!",
+  "InfoOwn": " \u0007 Nie możesz pobrać informacji o serwerze na którym obecnie jesteś. Jak potrzebujesz IP, trzymaj: \u0001",
+  "CurrentInfoOwn": "<-- Jesteś tutaj."
 }

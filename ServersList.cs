@@ -1,12 +1,13 @@
 ﻿using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
 using MySqlConnector;
-using Newtonsoft.Json.Linq;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 
 namespace ServersList;
 
@@ -27,11 +28,23 @@ public class LiveInfo {
         (this.teamCount, this.mapName) = (teamCount, mapName);
 }
 
-public class ServersList : BasePlugin
+public class ServersListConfig : BasePluginConfig
+{
+    [JsonPropertyName("ServerIp")] public string ServerIp { get; set; } = "0.0.0.0";
+    [JsonPropertyName("Host")] public string Host { get; set; } = "127.0.0.1";
+    [JsonPropertyName("Port")] public int Port { get; set; } = 3306;
+    [JsonPropertyName("User")] public string User { get; set; } = "";
+    [JsonPropertyName("Pass")] public string Pass { get; set; } = "";
+    [JsonPropertyName("dBName")] public string dBName { get; set; } = "";
+}
+
+public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 {
     public override string ModuleName => "ServersList";
     public override string ModuleAuthor => "NyggaBytes";
-    public override string ModuleVersion => "1.0.0";
+    public override string ModuleVersion => "1.0.1";
+    public ServersListConfig Config { get; set; } = new();
+    
     public int serverIdentifier = 0;
 
     private MySqlConnection? _connection;
@@ -40,9 +53,7 @@ public class ServersList : BasePlugin
 
     public override void Load(bool hotReload)
     {
-        loadConfig();
-        if (serverIdentifier == -1) Server.PrintToConsole("[ServersList] ERROR: Could not load server id. Check config.");
-        else if (serverIdentifier > 0) Server.PrintToConsole($"[ServersList] SUCCESS: Loaded plugin, hooked to id: {serverIdentifier}");
+        if (serverIdentifier > 0) Server.PrintToConsole($"[ServersList] SUCCESS: Loaded plugin, hooked to id: {serverIdentifier}");
 
         loadServers();
         if (Servers!.Count() > 0) { Server.PrintToConsole($"[ServersList] SUCCESS: Loaded {Servers!.Count()} servers from database(including this)."); }
@@ -204,32 +215,6 @@ public class ServersList : BasePlugin
                && (p.Team == CsTeam.Terrorist || p.Team == CsTeam.CounterTerrorist))).Count();
     }
 
-    private void loadConfig()
-    {
-        JObject data = JObject.Parse(LoadJson(ModuleDirectory + "/config.cfg"));
-        if (data != null)
-        {
-            connectionString = data["database"]!.ToString();
-            if (databaseConnect())
-            {
-                using (var query = new MySqlCommand($"SELECT `id` FROM `lvl_web_servers` WHERE `ip` = '{MySqlHelper.EscapeString(data["ip"]!.ToString())}';", _connection).ExecuteReader())
-                {
-                    if (query.Read()) { serverIdentifier = query.GetInt32(0); }
-                    else { serverIdentifier = -1; }
-                    query.Dispose();
-                }
-            }
-        } else {
-            serverIdentifier = -1;
-            Server.PrintToConsole("[ServersList] ERROR: Could not load plugin configuration.");
-        }
-    }
-    public string LoadJson(string filepath)
-    {
-        using (StreamReader r = new StreamReader(filepath))
-        { return r.ReadToEnd(); }
-    }
-
     private void loadServers()
     {
         Servers!.Clear();
@@ -263,6 +248,28 @@ public class ServersList : BasePlugin
             }
         } else returnVal = new LiveInfo(-2, "");
         return returnVal!;
+    }
+
+    public void OnConfigParsed(ServersListConfig config)
+    {
+        Config = config;
+        connectionString = $"Server={Config.Host};User ID={Config.User};Password={Config.Pass};Database={Config.dBName}";
+        if (databaseConnect())
+        {
+            using (var query = new MySqlCommand($"SELECT `id` FROM `lvl_web_servers` WHERE `ip` = '{MySqlHelper.EscapeString(Config.ServerIp)}';", _connection).ExecuteReader())
+            {
+                if (query.Read()) { serverIdentifier = query.GetInt32(0); }
+                else {
+                    serverIdentifier = -1;
+                    throw new Exception("This server ip specified don't exist in the Database.");
+                }
+                query.Close();
+                query.Dispose();
+            }
+        } else {
+            serverIdentifier = -1;
+            throw new Exception("Database connection error.");
+        }
     }
     #endregion
 }

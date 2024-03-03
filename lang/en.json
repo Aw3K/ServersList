@@ -1,3 +1,9 @@
 {
-  "DatabaseError": " [\u0004ServersList\u0001] \u0007Error while trying to connect with database."
+  "DatabaseError": " [\u0004ServersList\u0001] \u0007Error while trying to connect with database.",
+  "DatabaseErrList": " Could not retrive status.",
+  "NotFoundAny": "\u0020\u0007Did not found any servers matching your search.",
+  "CurrentPlaying": " Players",
+  "ConnectWith": " Wanna Join? Type \u0004connect {0}\u0001 in console\u0004!",
+  "InfoOwn": " \u0007 You can't retrive information on server you are currently on. Theres IP if needed: \u0001",
+  "CurrentInfoOwn": "<-- You are there."
 }

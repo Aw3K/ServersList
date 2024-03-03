@@ -1,0 +1,9 @@
+{
+  "ConfigVersion": 1,
+  "ServerIp": "0.0.0.0",
+  "Host": "",
+  "Port": 3306,
+  "User": "",
+  "Pass": "",
+  "dBName": ""
+}
