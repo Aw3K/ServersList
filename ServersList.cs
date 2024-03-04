@@ -15,9 +15,11 @@ public class ServerInstance {
     public required int id { get; set; }
     public required string ip { get; set; }
     public required string name { get; set; }
+    public required int teamCount { get; set; }
+    public required string mapName { get; set; }
     [SetsRequiredMembers]
-    public ServerInstance(int id, string ip, string name) =>
-    (this.id, this.ip, this.name) = (id, ip, name);
+    public ServerInstance(int id, string ip, string name, int teamCount, string mapName) =>
+    (this.id, this.ip, this.name, this.teamCount, this.mapName) = (id, ip, name, teamCount, mapName);
 }
 
 public class LiveInfo {
@@ -42,7 +44,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 {
     public override string ModuleName => "ServersList";
     public override string ModuleAuthor => "NyggaBytes";
-    public override string ModuleVersion => "1.0.2";
+    public override string ModuleVersion => "1.0.3";
     public ServersListConfig Config { get; set; } = new();
     
     public int serverIdentifier = 0;
@@ -66,7 +68,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 
     #region Commands
     [ConsoleCommand("css_servers", "HSMANIA.net Servers list.")]
-    [ConsoleCommand("css_serwery", "HSMANIA.net Servers list.")]
+    [ConsoleCommand("css_serwery", "HSMANIA.net Lista serwerów.")]
     [CommandHelper(minArgs: 0, usage: "<NAME>", whoCanExecute: CommandUsage.CLIENT_ONLY)]
     public void OnServersCommand(CCSPlayerController? player, CommandInfo command)
     {
@@ -79,56 +81,30 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         command.ReplyToCommand(" ");
         if (command.ArgString != "")
         {
-            var rowsFound = 0;
-            using (var rows = new MySqlCommand($"SELECT COUNT(`id`) FROM `lvl_web_servers` WHERE `name` LIKE '%{MySqlHelper.EscapeString(command.ArgString)}%';", _connection).ExecuteReader())
+            List<ServerInstance> founded = Servers!.FindAll(
+                delegate(ServerInstance e) { return e.name.ToLower().Contains(command.ArgString.ToLower()); }
+            );
+            if (founded.Count() < 1) command.ReplyToCommand(Localizer["NotFoundAny"]);
+            else if (founded.Count() == 1)
             {
-                rows.Read();
-                rowsFound = rows.GetInt32(0);
-                rows.Close();
-                rows.Dispose();
-            }
-            if (rowsFound < 1) command.ReplyToCommand(Localizer["NotFoundAny"]);
-            else if (rowsFound == 1)
-            {
-                using(var query = new MySqlCommand($"SELECT `id`,`ip`,`name`,`active_players`,`map_name` FROM `lvl_web_servers` WHERE `name` LIKE '%{MySqlHelper.EscapeString(command.ArgString)}%';", _connection).ExecuteReader())
+                if (founded.First().teamCount == -1) command.ReplyToCommand($" \u0004|> \u0001{founded.First().name} \u0004| \u0007 OFFLINE");
+                else
                 {
-                    query.Read();
-                    if (query.GetInt32(3) == -1) command.ReplyToCommand($" \u0004|> \u0001{query.GetString(2)} \u0004| \u0007 OFFLINE");
-                    else
+                    if (founded.First().id != serverIdentifier)
                     {
-                        if (query.GetInt32(0) != serverIdentifier)
-                        {
-                            command.ReplyToCommand($" \u0004|> \u0001{query.GetString(2)} \u0004| ONLINE \u0001" + Localizer["CurrentPlaying"] + "\u0004: \u000C" + query.GetInt32(3) + "\u0020\u0004|\u0020\u000C" + query.GetString(4));
-                            command.ReplyToCommand(string.Format(Localizer["ConnectWith"], query.GetString(1)));
-                        }
-                        else { command.ReplyToCommand(Localizer["InfoOwn"] + query.GetString(1)); }
+                        command.ReplyToCommand($" \u0004|> \u0001{founded.First().name} \u0004| ONLINE \u0001" + Localizer["CurrentPlaying"] + "\u0004: \u000C" + founded.First().teamCount + "\u0020\u0004|\u0020\u000C" + founded.First().mapName);
+                        command.ReplyToCommand(string.Format(Localizer["ConnectWith"], founded.First().ip));
                     }
-                    query.Close();
-                    query.Dispose();
+                    else { command.ReplyToCommand(Localizer["InfoOwn"] + founded.First().ip); }
                 }
             }
-            else
-            {
-                using (var query = new MySqlCommand($"SELECT `id`,`ip`,`name`,`active_players`,`map_name` FROM `lvl_web_servers` WHERE `name` LIKE '%{MySqlHelper.EscapeString(command.ArgString)}%';", _connection).ExecuteReader())
-                {
-                    while (query.Read()) replyToCommandList(command, query.GetInt32(0), query.GetString(1), query.GetString(2), query.GetInt32(3), query.GetString(4));
-                    query.Close();
-                    query.Dispose();
-                }
-            }
-        } else {
-            foreach (var server in Servers!) replyToCommandList(command, (int)server.id!, server.ip!, server.name!);
-        }
+            else foreach(var server in founded) replyToCommandList(command, server.id, server.ip, server.name, server.teamCount, server.mapName);
+        } else foreach (var server in Servers!) replyToCommandList(command, server.id, server.ip, server.name, server.teamCount, server.mapName);
         command.ReplyToCommand(" ");
     }
     #endregion
 
     #region Events
-    [GameEventHandler(HookMode.Post)]
-    public HookResult OnRoundOfficiallyEnd(EventRoundOfficiallyEnded @event, GameEventInfo @info) {
-        setPlayerCount(ActivePlayersCount());
-        return HookResult.Continue;
-    }
     [GameEventHandler(HookMode.Pre)]
     public HookResult OnServerShutdown(EventServerShutdown @event, GameEventInfo @info) {
         setShutdownInDataBase();
@@ -137,6 +113,14 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
     [GameEventHandler(HookMode.Post)]
     public HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo @info)
     {
+        loadServers();
+        setPlayerCount(ActivePlayersCount());
+        return HookResult.Continue;
+    }
+    [GameEventHandler(HookMode.Post)]
+    public HookResult OnRoundPrestart(EventRoundStart @event, GameEventInfo info)
+    {
+        loadServers();
         setPlayerCount(ActivePlayersCount());
         return HookResult.Continue;
     }
@@ -159,49 +143,38 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         return false;
     }
 
-    public void replyToCommandList(CommandInfo command, int id, string ip, string name, int playerCount = -3, string mapName = "") {
-        if (playerCount == -3) {
-            LiveInfo info = getLiveInfo(id);
-            playerCount = info.teamCount;
-            if (info.mapName != "") mapName = info.mapName;
-        }
+    public void replyToCommandList(CommandInfo command, int id, string ip, string name, int playerCount, string mapName) {
         if (playerCount == -1) command.ReplyToCommand($" \u0004|> \u0001{name} \u0004| \u0007 OFFLINE");
         else if (playerCount == -2) command.ReplyToCommand($" \u0004|> \u0001{name} \u0004| \u0007 " + Localizer["DatabaseErrList"]);
         else {
-            if (id == serverIdentifier) { command.ReplyToCommand($" \u0004|> \u0001{name} \u0004| \u0001" + Localizer["CurrentInfoOwn"]); }
+            if (id == serverIdentifier) { command.ReplyToCommand($" \u0004|> \u0001{name} \u0004| \u0001" + Localizer["CurrentInfoOwn"] + " \u0004| \u0001" + ip); }
             else command.ReplyToCommand($" \u0004|> \u0001{name} \u0004| ONLINE \u0001[\u000C{mapName}\u0001] " + Localizer["CurrentPlaying"] + "\u0004: \u000C" + playerCount + " \u0004| \u0001" + ip);
         }
     }
     private void setPlayerCountAndMapStartup(string mapName) {
         if (databaseConnect())
         {
-            using (var querry = new MySqlCommand($"UPDATE `lvl_web_servers` SET `active_players` = '0', `map_name` = '{mapName}' WHERE `id` = '{serverIdentifier}';", _connection))
-            {
-                querry.ExecuteScalar();
-                querry.Dispose();
-            }
+            using var querry = new MySqlCommand($"UPDATE `lvl_web_servers` SET `active_players` = '0', `map_name` = '{mapName}' WHERE `id` = '{serverIdentifier}';", _connection);
+            querry.ExecuteNonQuery();
+            querry.Dispose();
         }
     }
     private void setPlayerCount(int playerCount)
     {
         if (databaseConnect())
         {
-            using (var querry = new MySqlCommand($"UPDATE `lvl_web_servers` SET `active_players` = '{playerCount}' WHERE `id` = '{serverIdentifier}';", _connection))
-            {
-                querry.ExecuteScalar();
-                querry.Dispose();
-            }
+            using var querry = new MySqlCommand($"UPDATE `lvl_web_servers` SET `active_players` = '{playerCount}' WHERE `id` = '{serverIdentifier}';", _connection);
+            querry.ExecuteNonQuery();
+            querry.Dispose();
         }
     }
     private void setShutdownInDataBase()
     {
         if (databaseConnect())
         {
-            using (var querry = new MySqlCommand($"UPDATE `lvl_web_servers` SET `active_players` = '-1' WHERE `id` = '{serverIdentifier}';", _connection))
-            {
-                querry.ExecuteScalar();
-                querry.Dispose();
-            }
+            using var querry = new MySqlCommand($"UPDATE `lvl_web_servers` SET `active_players` = '-1' WHERE `id` = '{serverIdentifier}';", _connection);
+            querry.ExecuteNonQuery();
+            querry.Dispose();
         }
     }
 
@@ -221,34 +194,18 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         Servers!.Clear();
         if (databaseConnect())
         {
-            using (var query = new MySqlCommand($"SELECT `id`,`ip`,`name` FROM `lvl_web_servers`;", _connection))
+            using (var query = new MySqlCommand($"SELECT `id`,`ip`,`name`,`active_players`,`map_name` FROM `lvl_web_servers`;", _connection))
             {
-                var result = query.ExecuteReader();
+                using var result = query.ExecuteReader();
                 while (result.Read())
                 {
-                    ServerInstance instance = new ServerInstance(result.GetInt32(0), result.GetString(1), result.GetString(2));
+                    ServerInstance instance = new ServerInstance(result.GetInt32(0), result.GetString(1), result.GetString(2), result.GetInt32(3), result.GetString(4));
                     Servers.Add(instance);
                 }
+                result.Close();
                 result.Dispose();
             }
         }
-    }
-    public LiveInfo getLiveInfo(int id)
-    {
-        LiveInfo returnVal = null!;
-        if (databaseConnect())
-        {
-            using (var query = new MySqlCommand($"SELECT `active_players`,`map_name` FROM `lvl_web_servers` WHERE `id` = '{id}';", _connection).ExecuteReader())
-            {
-                if (query.Read())
-                {
-                    returnVal = new LiveInfo(query.GetInt32(0), query.GetString(1));
-                }
-                query.Close();
-                query.Dispose();
-            }
-        } else returnVal = new LiveInfo(-2, "");
-        return returnVal!;
     }
 
     public void OnConfigParsed(ServersListConfig config)
