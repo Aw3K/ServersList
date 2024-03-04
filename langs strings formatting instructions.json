@@ -1,0 +1,12 @@
+{
+  "LOGO": "\u2029\u0020\u0020\u0004HS\u0006MAN\u0005IA\u0001.net\u2029",
+  "DatabaseError": "\u0020\u0007Error while trying to connect with database.",
+  "NotFoundAny": "\u0020\u0007Did not found any servers matching your search.",
+  "InfoOwn": " \u0007 You can't retrive information on server you are currently on. Theres IP if needed: \u0001{0}", // {0} - Server IP
+  "OFFLINE": " \u0004|> \u0001{0} \u0004| \u0007 OFFLINE", // {0} - Displayed Server NAME
+  "DatabaseErrList": "\u0020\u0004|> \u0001{0} \u0004| \u0007Could not retrive status.", // {0} - Displayed Server NAME
+  "MultipleOutFL": " \u0004|> \u0001{0} \u0004| \u0001<-- You are there --> \u0004| \u0001{1}", // {0} - Server NAME, {1} - Server IP
+  "MultipleOutSL": " \u0004|> \u0001{0} \u0004| ONLINE \u0001[\u000C{1}\u0001] Players\u0004: \u000C{2}\u0004/\u000C{3}\u0004| \u0001{4}", // {0} - Server NAME, {1} - Online Players, {2} - Max Players + Players Offset, {3} - Current Map, {4} - Server IP
+  "ConnectWithFL": " \u0004|> \u0001{0} \u0004| ONLINE \u0001 Players\u0004: \u000C{1}\u0004/\u000C{2}\u0020\u0004|\u0020\u000C{3}", // {0} - Server NAME, {1} - Online Players, {2} - Max Players + Players Offset, {3} - Current Map
+  "ConnectWithSL": " Wanna Join? Type \u0004connect {0}\u0001 in console\u0004!", // {0} - Server IP
+}
