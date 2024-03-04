@@ -16,18 +16,12 @@ public class ServerInstance {
     public required string ip { get; set; }
     public required string name { get; set; }
     public required int teamCount { get; set; }
+    public required int maxPlayers { get; set; }
+    public required int maxPlayersOffset { get; set; }
     public required string mapName { get; set; }
     [SetsRequiredMembers]
-    public ServerInstance(int id, string ip, string name, int teamCount, string mapName) =>
-    (this.id, this.ip, this.name, this.teamCount, this.mapName) = (id, ip, name, teamCount, mapName);
-}
-
-public class LiveInfo {
-    public required int teamCount { get; set; }
-    public required string mapName { get; set; }
-    [SetsRequiredMembers]
-    public LiveInfo(int teamCount, string mapName) =>
-        (this.teamCount, this.mapName) = (teamCount, mapName);
+    public ServerInstance(int id, string ip, string name, int teamCount, int maxPlayers, int maxPlayersOffset, string mapName) =>
+    (this.id, this.ip, this.name, this.teamCount,this.maxPlayers, this.maxPlayersOffset, this.mapName) = (id, ip, name, teamCount, maxPlayers, maxPlayersOffset, mapName);
 }
 
 public class ServersListConfig : BasePluginConfig
@@ -44,7 +38,8 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 {
     public override string ModuleName => "ServersList";
     public override string ModuleAuthor => "NyggaBytes";
-    public override string ModuleVersion => "1.0.3";
+    public override string ModuleVersion => "1.0.4";
+    public override string ModuleDescription => "";
     public ServersListConfig Config { get; set; } = new();
     
     public int serverIdentifier = 0;
@@ -63,7 +58,6 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 
         RegisterListener<Listeners.OnServerPreFatalShutdown>(setShutdownInDataBase);
         RegisterListener<Listeners.OnMapStart>(setPlayerCountAndMapStartup);
-        base.Load(hotReload);
     }
 
     #region Commands
@@ -76,9 +70,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
             command.ReplyToCommand(Localizer["DatabaseError"]);
             return;
         }
-        command.ReplyToCommand(" ");
-        command.ReplyToCommand("\u0020\u0020\u0004HS\u0006MAN\u0005IA\u0001.net");
-        command.ReplyToCommand(" ");
+        command.ReplyToCommand(Localizer["LOGO"]);
         if (command.ArgString != "")
         {
             List<ServerInstance> founded = Servers!.FindAll(
@@ -87,19 +79,19 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
             if (founded.Count() < 1) command.ReplyToCommand(Localizer["NotFoundAny"]);
             else if (founded.Count() == 1)
             {
-                if (founded.First().teamCount == -1) command.ReplyToCommand($" \u0004|> \u0001{founded.First().name} \u0004| \u0007 OFFLINE");
+                if (founded.First().teamCount == -1) command.ReplyToCommand(string.Format(Localizer["OFFLINE"], founded.First().name));
                 else
                 {
                     if (founded.First().id != serverIdentifier)
                     {
-                        command.ReplyToCommand($" \u0004|> \u0001{founded.First().name} \u0004| ONLINE \u0001" + Localizer["CurrentPlaying"] + "\u0004: \u000C" + founded.First().teamCount + "\u0020\u0004|\u0020\u000C" + founded.First().mapName);
-                        command.ReplyToCommand(string.Format(Localizer["ConnectWith"], founded.First().ip));
+                        command.ReplyToCommand(string.Format(Localizer["ConnectWithFL"], founded.First().name, founded.First().teamCount, founded.First().maxPlayers + founded.First().maxPlayersOffset, founded.First().mapName));
+                        command.ReplyToCommand(string.Format(Localizer["ConnectWithSL"], founded.First().ip));
                     }
-                    else { command.ReplyToCommand(Localizer["InfoOwn"] + founded.First().ip); }
+                    else command.ReplyToCommand(string.Format(Localizer["InfoOwn"], founded.First().ip)); 
                 }
             }
-            else foreach(var server in founded) replyToCommandList(command, server.id, server.ip, server.name, server.teamCount, server.mapName);
-        } else foreach (var server in Servers!) replyToCommandList(command, server.id, server.ip, server.name, server.teamCount, server.mapName);
+            else foreach(var server in founded) replyToCommandList(command, server.id, server.ip, server.name, server.teamCount, server.maxPlayers+server.maxPlayersOffset, server.mapName);
+        } else foreach (var server in Servers!) replyToCommandList(command, server.id, server.ip, server.name, server.teamCount, server.maxPlayers+server.maxPlayersOffset, server.mapName);
         command.ReplyToCommand(" ");
     }
     #endregion
@@ -143,18 +135,18 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         return false;
     }
 
-    public void replyToCommandList(CommandInfo command, int id, string ip, string name, int playerCount, string mapName) {
-        if (playerCount == -1) command.ReplyToCommand($" \u0004|> \u0001{name} \u0004| \u0007 OFFLINE");
-        else if (playerCount == -2) command.ReplyToCommand($" \u0004|> \u0001{name} \u0004| \u0007 " + Localizer["DatabaseErrList"]);
+    public void replyToCommandList(CommandInfo command, int id, string ip, string name, int playerCount, int maxPlayers, string mapName) {
+        if (playerCount == -1) command.ReplyToCommand(string.Format(Localizer["OFFLINE"], name));
+        else if (playerCount == -2) command.ReplyToCommand(string.Format(Localizer["DatabaseErrList"], name));
         else {
-            if (id == serverIdentifier) { command.ReplyToCommand($" \u0004|> \u0001{name} \u0004| \u0001" + Localizer["CurrentInfoOwn"] + " \u0004| \u0001" + ip); }
-            else command.ReplyToCommand($" \u0004|> \u0001{name} \u0004| ONLINE \u0001[\u000C{mapName}\u0001] " + Localizer["CurrentPlaying"] + "\u0004: \u000C" + playerCount + " \u0004| \u0001" + ip);
+            if (id == serverIdentifier) command.ReplyToCommand(string.Format(Localizer["MultipleOutFL"], name, ip));
+            else command.ReplyToCommand(string.Format(Localizer["MultipleOutSL"], name, mapName, playerCount, maxPlayers, ip));
         }
     }
     private void setPlayerCountAndMapStartup(string mapName) {
         if (databaseConnect())
         {
-            using var querry = new MySqlCommand($"UPDATE `lvl_web_servers` SET `active_players` = '0', `map_name` = '{mapName}' WHERE `id` = '{serverIdentifier}';", _connection);
+            using var querry = new MySqlCommand($"UPDATE `lvl_web_servers` SET `active_players` = '0', `map_name` = '{mapName}', `max_players` = '{Server.MaxPlayers}' WHERE `id` = '{serverIdentifier}';", _connection);
             querry.ExecuteNonQuery();
             querry.Dispose();
         }
@@ -194,12 +186,12 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         Servers!.Clear();
         if (databaseConnect())
         {
-            using (var query = new MySqlCommand($"SELECT `id`,`ip`,`name`,`active_players`,`map_name` FROM `lvl_web_servers`;", _connection))
+            using (var query = new MySqlCommand($"SELECT `id`,`ip`,`name`,`active_players`,`max_players`,`max_players_offset`,`map_name` FROM `lvl_web_servers`;", _connection))
             {
                 using var result = query.ExecuteReader();
                 while (result.Read())
                 {
-                    ServerInstance instance = new ServerInstance(result.GetInt32(0), result.GetString(1), result.GetString(2), result.GetInt32(3), result.GetString(4));
+                    ServerInstance instance = new ServerInstance(result.GetInt32(0), result.GetString(1), result.GetString(2), result.GetInt32(3), result.GetInt32(4), result.GetInt32(5), result.GetString(6));
                     Servers.Add(instance);
                 }
                 result.Close();
@@ -211,7 +203,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
     public void OnConfigParsed(ServersListConfig config)
     {
         Config = config;
-        connectionString = $"Server={Config.Host};User ID={Config.User};Password={Config.Pass};Database={Config.dBName}";
+        connectionString = $"Server={Config.Host};Port={Config.Port};User ID={Config.User};Password={Config.Pass};Database={Config.dBName}";
         if (databaseConnect())
         {
             using (var query = new MySqlCommand($"SELECT `id` FROM `lvl_web_servers` WHERE `ip` = '{MySqlHelper.EscapeString(Config.ServerIp)}';", _connection).ExecuteReader())
