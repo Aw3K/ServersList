@@ -32,18 +32,19 @@ public class ServersListConfig : BasePluginConfig
     [JsonPropertyName("User")] public string User { get; set; } = "";
     [JsonPropertyName("Pass")] public string Pass { get; set; } = "";
     [JsonPropertyName("dBName")] public string dBName { get; set; } = "";
+    [JsonPropertyName("TableName")] public string TableName { get; set; } = "serverslist_servers";
 }
 
 public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 {
     public override string ModuleName => " ServersList";
     public override string ModuleAuthor => "NyggaBytes";
-    public override string ModuleVersion => "1.0.5";
+    public override string ModuleVersion => "1.0.6";
     public override string ModuleDescription => "";
     public ILogger? logger;
     public ServersListConfig Config { get; set; } = new();
     
-    public int serverIdentifier = 0;
+    public int serverIdentifier = -1;
 
     private MySqlConnection? _connection;
     private string? connectionString;
@@ -55,7 +56,6 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         if (serverIdentifier > 0) logger.LogInformation($"Loaded plugin, hooked to id: {serverIdentifier}");
 
         loadServers();
-
         RegisterListener<Listeners.OnServerPreFatalShutdown>(setShutdownInDataBase);
         RegisterListener<Listeners.OnMapStart>(setPlayerCountAndMapStartup);
     }
@@ -66,11 +66,12 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
     [CommandHelper(minArgs: 0, usage: "<NAME>", whoCanExecute: CommandUsage.CLIENT_ONLY)]
     public void OnServersCommand(CCSPlayerController? player, CommandInfo command)
     {
-        if (!databaseConnect() || serverIdentifier == -1) {
+        command.ReplyToCommand(Localizer["LOGO"]);
+        if (!databaseConnect() || serverIdentifier == -1)
+        {
             command.ReplyToCommand(Localizer["DatabaseError"]);
             return;
         }
-        command.ReplyToCommand(Localizer["LOGO"]);
         if (command.ArgString != "")
         {
             List<ServerInstance> founded = Servers!.FindAll(
@@ -127,7 +128,6 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 
     #region functions
     private bool databaseConnect(bool req = false) {
-        if (serverIdentifier == -1) { return false; }
         if (_connection == null) { _connection = new MySqlConnection(connectionString); }
         if (_connection.State == ConnectionState.Open) { return true; }
         else if (_connection.State == ConnectionState.Closed && req == false) {
@@ -153,9 +153,10 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
     private void setPlayerCountAndMapStartup(string mapName) {
         if (databaseConnect())
         {
+            string mysqlQuery = $"UPDATE `{Config.TableName}` SET `active_players` = '0', `map_name` = '{mapName}', `max_players` = '{Server.MaxPlayers}' WHERE `id` = '{serverIdentifier}';";
             Task.Run(async () =>
             {
-                using var querry = new MySqlCommand($"UPDATE `lvl_web_servers` SET `active_players` = '0', `map_name` = '{mapName}', `max_players` = '{Server.MaxPlayers}' WHERE `id` = '{serverIdentifier}';", _connection);
+                using var querry = new MySqlCommand(mysqlQuery, _connection);
                 await querry.ExecuteNonQueryAsync();
                 await querry.DisposeAsync();
             });
@@ -165,8 +166,9 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
     {
         if (databaseConnect())
         {
+            string mysqlQuery = $"UPDATE `{Config.TableName}` SET `active_players` = '{playerCount}' WHERE `id` = '{serverIdentifier}';";
             Task.Run(async () => {
-                using var querry = new MySqlCommand($"UPDATE `lvl_web_servers` SET `active_players` = '{playerCount}' WHERE `id` = '{serverIdentifier}';", _connection);
+                using var querry = new MySqlCommand(mysqlQuery, _connection);
                 await querry.ExecuteNonQueryAsync();
                 await querry.DisposeAsync();
             });
@@ -176,8 +178,9 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
     {
         if (databaseConnect())
         {
+            string mysqlQuery = $"UPDATE `{Config.TableName}` SET `active_players` = '-1' WHERE `id` = '{serverIdentifier}';";
             Task.Run(async () => {
-                using var querry = new MySqlCommand($"UPDATE `lvl_web_servers` SET `active_players` = '-1' WHERE `id` = '{serverIdentifier}';", _connection);
+                using var querry = new MySqlCommand(mysqlQuery, _connection);
                 await querry.ExecuteNonQueryAsync();
                 await querry.DisposeAsync();
             });
@@ -202,7 +205,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         {
             Task.Run(async() =>
             {
-                using (var query = new MySqlCommand($"SELECT `id`,`ip`,`name`,`active_players`,`max_players`,`max_players_offset`,`map_name` FROM `lvl_web_servers`;", _connection))
+                using (var query = new MySqlCommand($"SELECT `id`,`ip`,`name`,`active_players`,`max_players`,`max_players_offset`,`map_name` FROM `{Config.TableName}`;", _connection))
                 {
                     using var result = await query.ExecuteReaderAsync();
                     while (await result.ReadAsync())
@@ -232,16 +235,29 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                 logger.LogCritical("ServerIp specified in the config is empty. Plugin won't work.");
             }
             else {
-                using (var query = new MySqlCommand($"SELECT `id` FROM `lvl_web_servers` WHERE `ip` = '{MySqlHelper.EscapeString(Config.ServerIp)}';", _connection).ExecuteReader())
+                try 
                 {
-                    if (query.Read()) { serverIdentifier = query.GetInt32(0); }
-                    else
+                    using (var query = new MySqlCommand($"SELECT `id` FROM `{Config.TableName}` WHERE `ip` = '{MySqlHelper.EscapeString(Config.ServerIp)}';", _connection).ExecuteReader())
                     {
-                        serverIdentifier = -1;
-                        logger?.LogCritical("This server ip specified don't exist in the database. Plugin won't work.");
+                        if (query.Read()) { serverIdentifier = query.GetInt32(0); }
+                        else
+                        {
+                            serverIdentifier = -1;
+                            logger?.LogCritical("This server ip specified don't exist in the database. Plugin won't work.");
+                        }
+                        query.Close();
+                        query.Dispose();
                     }
-                    query.Close();
-                    query.Dispose();
+                } catch (MySqlException ex)
+                {
+                    if (ex.ErrorCode == MySqlErrorCode.NoSuchTable) {
+                        using var querry = new MySqlCommand($"CREATE TABLE IF NOT EXISTS {Config.TableName} (id INT PRIMARY KEY AUTO_INCREMENT, ip  VARCHAR(64), name VARCHAR(64), active_players INT DEFAULT -1, max_players INT, max_players_offset INT DEFAULT 0);", _connection);
+                        querry.ExecuteNonQuery();
+                        querry.Dispose();
+                        logger.LogInformation($"Table not found in database, created one.");
+                        logger.LogInformation($"You need to insert data about servers into database for plugin to work.");
+                        serverIdentifier = -1;
+                    } else logger.LogCritical($"MySqlError: {ex.Message}");
                 }
             }
         } else {

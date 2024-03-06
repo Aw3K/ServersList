@@ -1,3 +1,4 @@
+//Plugin configuration will be in cssharp folder/configs/plugins/ServerList/
 {
   "ConfigVersion": 1,
   "ServerIp": "0.0.0.0",
@@ -5,5 +6,6 @@
   "Port": 3306,
   "User": "",
   "Pass": "",
-  "dBName": ""
+  "dBName": "",
+  "TableName": "serverslist_servers"
 }
