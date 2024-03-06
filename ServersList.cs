@@ -210,8 +210,8 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                         ServerInstance instance = new ServerInstance(result.GetInt32(0), result.GetString(1), result.GetString(2), result.GetInt32(3), result.GetInt32(4), result.GetInt32(5), result.GetString(6));
                         Servers.Add(instance);
                     }
-                    result.Close();
-                    result.Dispose();
+                    await result.CloseAsync();
+                    await result.DisposeAsync();
                 }
                 if (Servers.Count == 0) Server.NextFrame(() => { logger?.LogWarning($"Did not reload any servers from database."); });
                 else Server.NextFrame(() => { logger?.LogInformation($"Reloaded info about {Servers.Count} servers from database."); });
