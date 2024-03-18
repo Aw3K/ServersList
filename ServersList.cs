@@ -1,7 +1,9 @@
 ﻿using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
+using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Config;
 using CounterStrikeSharp.API.Modules.Utils;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
@@ -39,7 +41,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 {
     public override string ModuleName => " ServersList";
     public override string ModuleAuthor => "NyggaBytes";
-    public override string ModuleVersion => "1.0.7";
+    public override string ModuleVersion => "1.0.9";
     public override string ModuleDescription => "";
     public ILogger? logger;
     public ServersListConfig Config { get; set; } = new();
@@ -52,6 +54,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
     public override void Load(bool hotReload)
     {
         logger = Logger;
+        logger.LogInformation($"Plugin version: {ModuleVersion}");
         if (serverIdentifier > 0) logger.LogInformation($"Loaded plugin, hooked to id: {serverIdentifier}");
 
         loadServers();
@@ -60,6 +63,43 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
     }
 
     #region Commands
+    [ConsoleCommand("css_serverslist", "ServersList command for admins to manage.")]
+    [CommandHelper(minArgs: 1, usage: "<INFO|RELOAD>", whoCanExecute: CommandUsage.CLIENT_AND_SERVER)]
+    public void OnServersListCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (!AdminManager.PlayerHasPermissions(player, "@css/ban"))
+        {
+            player!.PrintToChat("\u0007 You don't have needed permissions to use this command.");
+            return;
+        }
+
+        if (command.ArgString == "INFO" || command.ArgString == "info")
+        {
+            command.ReplyToCommand($"[\u0004ServersList\u0001] Information");
+            command.ReplyToCommand($" \u0004Plugin Version\u0001: " + ModuleVersion);
+            command.ReplyToCommand($" \u0004ServerIdentifier\u0001: {serverIdentifier}");
+            try {
+                using var _connection = new MySqlConnection(connectionString);
+                _connection.Open();
+                command.ReplyToCommand($" \u0004Database connection\u0001: {_connection.State.ToString()}");
+                _connection.Close();
+            } catch (MySqlException e) {
+                command.ReplyToCommand($" \u0004Database connection\u0001: {e.Message}");
+            }
+            command.ReplyToCommand($"[/\u0004ServersList\u0001]");
+        }
+
+        if (command.ArgString == "RELOAD" || command.ArgString == "reload")
+        {
+            OnConfigParsed(ConfigManager.Load<ServersListConfig>("ServersList"));
+            command.ReplyToCommand($"[\u0004ServersList\u0001] Reloading");
+            if (serverIdentifier > 0) command.ReplyToCommand($" \u0004Reloaded plugin, hooked to id: \u0007{serverIdentifier}");
+            else command.ReplyToCommand($" \u0004Reloaded plugin, but \u0007couldn't hook to any id\u0004, check configuration and if specified server is present in database.");
+            command.ReplyToCommand($" \u0004Server Ip from config\u0001: {Config.ServerIp}");
+            command.ReplyToCommand($"[/\u0004ServersList\u0001]");
+        }
+    }
+
     [ConsoleCommand("css_servers", "HSMANIA.net Servers list.")]
     [ConsoleCommand("css_serwery", "HSMANIA.net Lista serwerów.")]
     [CommandHelper(minArgs: 0, usage: "<NAME>", whoCanExecute: CommandUsage.CLIENT_ONLY)]
@@ -110,13 +150,6 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         return HookResult.Continue;
     }
     [GameEventHandler(HookMode.Post)]
-    public HookResult OnPlayerConnectFull(EventPlayerConnectFull @event, GameEventInfo @info)
-    {
-        loadServers();
-        setPlayerCount(ActivePlayersCount());
-        return HookResult.Continue;
-    }
-    [GameEventHandler(HookMode.Post)]
     public HookResult OnRoundPrestart(EventRoundStart @event, GameEventInfo info)
     {
         loadServers();
@@ -144,6 +177,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                 await using var querry = new MySqlCommand(mysqlQuery, _connection);
                 var result = await querry.ExecuteNonQueryAsync();
                 if (result != 1) logger?.LogError($"Error in function setPlayerCountAndMapStartu, {result} rows affected instead of 1.");
+                await _connection.CloseAsync();
             }
             catch (MySqlException ex)
             {
@@ -153,6 +187,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
     }
     private void setPlayerCount(int playerCount)
     {
+        if (serverIdentifier == -1) return;
         string mysqlQuery = $"UPDATE `{Config.TableName}` SET `active_players` = '{playerCount}' WHERE `id` = '{serverIdentifier}';";
         Task.Run(async () => {
             try {
@@ -161,6 +196,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                 await using var querry = new MySqlCommand(mysqlQuery, _connection);
                 var result = await querry.ExecuteNonQueryAsync();
                 if (result != 1) logger?.LogError($"Error in function setPlayerCount, {result} rows affected instead of 1.");
+                await _connection.CloseAsync();
             }
             catch (MySqlException ex)
             {
@@ -178,6 +214,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
             using var querry = new MySqlCommand(mysqlQuery, _connection);
             var result = querry.ExecuteNonQuery();
             if (result != 1) logger?.LogError($"Error in function setShutdownInDataBase, {result} rows affected instead of 1.");
+            _connection.Close();
         }
         catch (MySqlException ex)
         {
@@ -216,6 +253,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                     }
                     if (Servers.Count() < 1) Server.NextFrame(() => { logger?.LogWarning($"Did not reload any servers from database."); });
                     else Server.NextFrame(() => { logger?.LogInformation($"Reloaded info about {Servers.Count()} servers from database."); });
+                    await _connection.CloseAsync();
                 }
                 catch (MySqlException ex)
                 {
@@ -228,7 +266,6 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
     public void OnConfigParsed(ServersListConfig config)
     {
         logger = Logger;
-        logger.LogInformation($"Plugin version: {ModuleVersion}");
         Config = config;
         connectionString = $"Server={Config.Host};Port={Config.Port};User ID={Config.User};Password={Config.Pass};Database={Config.dBName}";
         string mysqlQuery = $"SELECT `id` FROM `{Config.TableName}` WHERE `ip` = '{MySqlHelper.EscapeString(Config.ServerIp)}';";
@@ -252,6 +289,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                     serverIdentifier = -1;
                     logger?.LogCritical("This server ip specified don't exist in the database. Plugin won't work.");
                 }
+                _connection.Close();
             }
             catch (MySqlException ex)
             {
@@ -266,6 +304,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                         logger.LogInformation($"Table not found in database, created one.");
                         logger.LogInformation($"You need to insert data about servers into database for plugin to work.");
                         serverIdentifier = -1;
+                        _connection.Close();
                     }
                     catch (MySqlException exCreate) {
                         logger?.LogError($"Could not create instance of MySqlConnection, error: '{exCreate.Message}'. Operation will not happen: 'OnConfigParsedCreateTableIfNotExist'");
