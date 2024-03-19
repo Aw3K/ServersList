@@ -2,7 +2,7 @@ ServersList is a cssharp plugin for setting and displaying servers information, 
 
 For plugin to work, you must have MySql database, set credentials in plugin config(located at cssharp folder/configs/plugins/ServersList/ServersList.json), table will be created if not exist, plugin must be on every server for them to set live data into database.
 
-You can use existing table, but must include needed columns for it to work. A lot of information will be logged on server console.
+You can use existing table, but must include needed columns for it to work. A lot of information about plugin will be logged on server console so remember to check it often if some weird behaviours occurs.
 
 Configuration:
 
