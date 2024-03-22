@@ -269,7 +269,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         Config = config;
         connectionString = $"Server={Config.Host};Port={Config.Port};User ID={Config.User};Password={Config.Pass};Database={Config.dBName}";
         string mysqlQuery = $"SELECT `id` FROM `{Config.TableName}` WHERE `ip` = '{MySqlHelper.EscapeString(Config.ServerIp)}';";
-        string mysqlCreateTableQuery = $"CREATE TABLE IF NOT EXISTS {Config.TableName} (id INT PRIMARY KEY AUTO_INCREMENT, ip  VARCHAR(64), name VARCHAR(64), active_players INT DEFAULT -1, max_players INT, max_players_offset INT DEFAULT 0);";
+        string mysqlCreateTableQuery = $"CREATE TABLE IF NOT EXISTS {Config.TableName} (id INT PRIMARY KEY AUTO_INCREMENT, ip  VARCHAR(64), name VARCHAR(64), map_name VARCHAR(64), active_players INT DEFAULT -1, max_players INT, max_players_offset INT DEFAULT 0);";
         if (Config.ServerIp.Length == 0)
         {
             serverIdentifier = -1;
