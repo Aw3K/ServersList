@@ -35,6 +35,8 @@ public class ServersListConfig : BasePluginConfig
     [JsonPropertyName("Pass")] public string Pass { get; set; } = "";
     [JsonPropertyName("dBName")] public string dBName { get; set; } = "";
     [JsonPropertyName("TableName")] public string TableName { get; set; } = "serverslist_servers";
+    [JsonPropertyName("BasicPermissions")] public string BasicPermissions { get; set; } = "@css/ban";
+    [JsonPropertyName("RootPermissions")] public string RootPermissions { get; set; } = "@css/root";
 }
 
 public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
@@ -86,6 +88,8 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
             } catch (MySqlException e) {
                 command.ReplyToCommand($" \u0004Database connection\u0001: {e.Message}");
             }
+            command.ReplyToCommand($" \u0004Basic Permissions\u0001: {Config.BasicPermissions}");
+            command.ReplyToCommand($" \u0004Root Permissions\u0001: {Config.RootPermissions}");
             command.ReplyToCommand($"[/\u0004ServersList\u0001]");
         }
 
@@ -267,9 +271,11 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
     {
         logger = Logger;
         Config = config;
+        if (Config.RootPermissions.Length < 1) Config.RootPermissions = "@css/root";
+        if (Config.BasicPermissions.Length < 1) Config.BasicPermissions = "@css/ban";
         connectionString = $"Server={Config.Host};Port={Config.Port};User ID={Config.User};Password={Config.Pass};Database={Config.dBName}";
         string mysqlQuery = $"SELECT `id` FROM `{Config.TableName}` WHERE `ip` = '{MySqlHelper.EscapeString(Config.ServerIp)}';";
-        string mysqlCreateTableQuery = $"CREATE TABLE IF NOT EXISTS {Config.TableName} (id INT PRIMARY KEY AUTO_INCREMENT, ip  VARCHAR(64), name VARCHAR(64), map_name VARCHAR(64), active_players INT DEFAULT -1, max_players INT, max_players_offset INT DEFAULT 0);";
+        string mysqlCreateTableQuery = $"CREATE TABLE IF NOT EXISTS {Config.TableName} (id INT PRIMARY KEY AUTO_INCREMENT, ip  VARCHAR(64), name VARCHAR(64), map_name VARCHAR(64), active_players INT DEFAULT -1, max_players INT, max_players_offset INT DEFAULT 0); ALTER TABLE {Config.TableName} AUTO_INCREMENT=1;";
         if (Config.ServerIp.Length == 0)
         {
             serverIdentifier = -1;
