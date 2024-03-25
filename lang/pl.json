@@ -9,4 +9,5 @@
   "MultipleOutSL": " \u0004|> \u0001{0} \u0004| ONLINE \u0001[\u000C{1}\u0001] Gracze\u0004: \u000C{2}\u0004/\u000C{3}\u0004| \u0001{4}",
   "ConnectWithFL": " \u0004|> \u0001{0} \u0004| ONLINE \u0001 Gracze\u0004: \u000C{1}\u0004/\u000C{2}\u0020\u0004|\u0020\u000C{3}",
   "ConnectWithSL": " Chcesz dołączyć? Wpisz \u0004connect {0}\u0001 w konsoli\u0004!",
+  "NoPerms":  "\u0007 Nie masz wymaganej permisji by użyć tej komendy: {0}"
 }

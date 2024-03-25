@@ -43,7 +43,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 {
     public override string ModuleName => " ServersList";
     public override string ModuleAuthor => "NyggaBytes";
-    public override string ModuleVersion => "1.0.9";
+    public override string ModuleVersion => "1.1.0beta";
     public override string ModuleDescription => "";
     public ILogger? logger;
     public ServersListConfig Config { get; set; } = new();
@@ -66,12 +66,12 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 
     #region Commands
     [ConsoleCommand("css_serverslist", "ServersList command for admins to manage.")]
-    [CommandHelper(minArgs: 1, usage: "<INFO|RELOAD>", whoCanExecute: CommandUsage.CLIENT_AND_SERVER)]
+    [CommandHelper(minArgs: 1, usage: "Basic: <INFO> Root: <NAME|LIST|DELETE|RELOAD>", whoCanExecute: CommandUsage.CLIENT_AND_SERVER)]
     public void OnServersListCommand(CCSPlayerController? player, CommandInfo command)
     {
-        if (!AdminManager.PlayerHasPermissions(player, "@css/ban"))
+        if (!AdminManager.PlayerHasPermissions(player, Config.BasicPermissions))
         {
-            player!.PrintToChat("\u0007 You don't have needed permissions to use this command.");
+            command.ReplyToCommand(string.Format(Localizer[""], Config.BasicPermissions));
             return;
         }
 
@@ -80,27 +80,77 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
             command.ReplyToCommand($"[\u0004ServersList\u0001] Information");
             command.ReplyToCommand($" \u0004Plugin Version\u0001: " + ModuleVersion);
             command.ReplyToCommand($" \u0004ServerIdentifier\u0001: {serverIdentifier}");
-            try {
+            try
+            {
                 using var _connection = new MySqlConnection(connectionString);
                 _connection.Open();
                 command.ReplyToCommand($" \u0004Database connection\u0001: {_connection.State.ToString()}");
                 _connection.Close();
-            } catch (MySqlException e) {
+            }
+            catch (MySqlException e)
+            {
                 command.ReplyToCommand($" \u0004Database connection\u0001: {e.Message}");
             }
             command.ReplyToCommand($" \u0004Basic Permissions\u0001: {Config.BasicPermissions}");
             command.ReplyToCommand($" \u0004Root Permissions\u0001: {Config.RootPermissions}");
             command.ReplyToCommand($"[/\u0004ServersList\u0001]");
+            return;
         }
 
-        if (command.ArgString == "RELOAD" || command.ArgString == "reload")
+        if (!AdminManager.PlayerHasPermissions(player, Config.RootPermissions))
         {
-            OnConfigParsed(ConfigManager.Load<ServersListConfig>("ServersList"));
-            command.ReplyToCommand($"[\u0004ServersList\u0001] Reloading");
-            if (serverIdentifier > 0) command.ReplyToCommand($" \u0004Reloaded plugin, hooked to id: \u0007{serverIdentifier}");
-            else command.ReplyToCommand($" \u0004Reloaded plugin, but \u0007couldn't hook to any id\u0004, check configuration and if specified server is present in database.");
-            command.ReplyToCommand($" \u0004Server Ip from config\u0001: {Config.ServerIp}");
-            command.ReplyToCommand($"[/\u0004ServersList\u0001]");
+            command.ReplyToCommand(string.Format(Localizer[""], Config.BasicPermissions));
+            return;
+        }
+        else {
+            if (command.ArgString == "RELOAD" || command.ArgString == "reload")
+            {
+                OnConfigParsed(ConfigManager.Load<ServersListConfig>("ServersList"));
+                command.ReplyToCommand($"[\u0004ServersList\u0001] Reloading");
+                if (serverIdentifier > 0) command.ReplyToCommand($" \u0004Reloaded plugin, hooked to id: \u0007{serverIdentifier}");
+                else command.ReplyToCommand($" \u0004Reloaded plugin, but \u0007couldn't hook to any id\u0004, check configuration and if specified server is present in database, to add this server use command: (css_/!)serverslist name \"NAME OF SERVER\"");
+                command.ReplyToCommand($" \u0004Server Ip from config\u0001: {Config.ServerIp}");
+                command.ReplyToCommand($"[/\u0004ServersList\u0001]");
+                return;
+            }
+
+            if (command.ArgByIndex(1) == "name" || command.ArgByIndex(1) == "NAME")
+            {
+                if (command.ArgCount > 3) { command.ReplyToCommand($" \u0004usage\u0001: (css_/!)serverslist name \"NAME OF SERVER\""); return; }
+                else if (command.ArgCount == 3)
+                {
+                    if (Config.ServerIp.Length < 1 || Config.ServerIp == "0.0.0.0") { command.ReplyToCommand("Empty or default server ip set in config, set proper one and reload plugin."); return; }
+                    try
+                    {
+                        using var _connection = new MySqlConnection(connectionString);
+                        _connection.Open();
+                        using var querry = new MySqlCommand($"SELECT `id`,`ip` FROM `{Config.TableName}` WHERE `ip` = '{Config.ServerIp}'", _connection);
+                        using var result = querry.ExecuteReader();
+                        if (result.Read())
+                        {
+                            using var querryUpdate = new MySqlCommand($"UPDATE `{Config.TableName}` SET `name = '@name' WHERE `ip` = '{Config.ServerIp}';", _connection);
+                            querryUpdate.Parameters.AddWithValue("@name", command.ArgByIndex(2));
+                            var resultUpdate = querryUpdate.ExecuteNonQuery();
+                            if (resultUpdate != 1) command.ReplyToCommand($"Error in function ServersListCommandNamUpdate, {resultUpdate} rows affected instead of 1.");
+                            else if (resultUpdate == 1) command.ReplyToCommand($"Successfully updated name of current server.");
+                        }
+                        else {
+                            using var querryInsert = new MySqlCommand($"INSERT INTO `{Config.TableName}` (`ip`,`name`) VALUES ('@ip','@name')';", _connection);
+                            querryInsert.Parameters.AddWithValue("@ip", Config.ServerIp);
+                            querryInsert.Parameters.AddWithValue("@name", command.ArgByIndex(2));
+                            var resultInsert = querryInsert.ExecuteNonQuery();
+                            if (resultInsert != 1) command.ReplyToCommand($"Error in function ServersListCommandNameInsert, {resultInsert} rows affected instead of 1.");
+                            else if (resultInsert == 1) command.ReplyToCommand($"Successfully inserted record with current ip and name. Reload plugin.");
+                        }
+                        _connection.Close();
+                    }
+                    catch (MySqlException ex)
+                    {
+                        command.ReplyToCommand($"Could not create instance of MySqlConnection, error: '{ex.Message}'. Operation will not happen: 'ServersListCommandName'");
+                    }
+                    return;
+                }
+            }
         }
     }
 
@@ -271,8 +321,19 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
     {
         logger = Logger;
         Config = config;
-        if (Config.RootPermissions.Length < 1) Config.RootPermissions = "@css/root";
-        if (Config.BasicPermissions.Length < 1) Config.BasicPermissions = "@css/ban";
+        if (Config.RootPermissions.Length < 1) {
+            Config.RootPermissions = "@css/root";
+            logger.LogWarning($"RootPermissions not set in the config, defaulting to '@css/root'");
+        }
+        if (Config.BasicPermissions.Length < 1) {
+            Config.BasicPermissions = "@css/ban";
+            logger.LogWarning($"BasicPermissions not set in the config, defaulting to '@css/ban'");
+        }
+        if (Config.TableName.Length < 1)
+        {
+            Config.TableName = "serverslist_servers";
+            logger.LogWarning($"Database Table Name not set in the config, defaulting to 'serverslist_servers'");
+        }
         connectionString = $"Server={Config.Host};Port={Config.Port};User ID={Config.User};Password={Config.Pass};Database={Config.dBName}";
         string mysqlQuery = $"SELECT `id` FROM `{Config.TableName}` WHERE `ip` = '{MySqlHelper.EscapeString(Config.ServerIp)}';";
         string mysqlCreateTableQuery = $"CREATE TABLE IF NOT EXISTS {Config.TableName} (id INT PRIMARY KEY AUTO_INCREMENT, ip  VARCHAR(64), name VARCHAR(64), map_name VARCHAR(64), active_players INT DEFAULT -1, max_players INT, max_players_offset INT DEFAULT 0); ALTER TABLE {Config.TableName} AUTO_INCREMENT=1;";
@@ -308,7 +369,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                         using var querry = new MySqlCommand(mysqlCreateTableQuery, _connection);
                         querry.ExecuteNonQuery();
                         logger.LogInformation($"Table not found in database, created one.");
-                        logger.LogInformation($"You need to insert data about servers into database for plugin to work.");
+                        logger.LogInformation($"You need to insert data about servers into database for plugin to work. To add this server use command: (css_/!)serverslist name \"NAME OF SERVER\"");
                         serverIdentifier = -1;
                         _connection.Close();
                     }
