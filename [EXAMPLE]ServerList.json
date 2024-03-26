@@ -1,11 +1,13 @@
 //Plugin configuration will be in cssharp folder/configs/plugins/ServerList/ServerList.json
 {
-  "ConfigVersion": 1,
   "ServerIp": "0.0.0.0",
   "Host": "",
   "Port": 3306,
   "User": "",
   "Pass": "",
   "dBName": "",
-  "TableName": "serverslist_servers"
+  "TableName": "serverslist_servers",
+  "BasicPermissions": "@css/ban",
+  "RootPermissions": "@css/root",
+  "ConfigVersion": 1
 }

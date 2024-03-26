@@ -9,4 +9,5 @@
   "MultipleOutSL": " \u0004|> \u0001{0} \u0004| ONLINE \u0001[\u000C{1}\u0001] Players\u0004: \u000C{2}\u0004/\u000C{3}\u0004| \u0001{4}", // {0} - Server NAME, {1} - Online Players, {2} - Max Players + Players Offset, {3} - Current Map, {4} - Server IP
   "ConnectWithFL": " \u0004|> \u0001{0} \u0004| ONLINE \u0001 Players\u0004: \u000C{1}\u0004/\u000C{2}\u0020\u0004|\u0020\u000C{3}", // {0} - Server NAME, {1} - Online Players, {2} - Max Players + Players Offset, {3} - Current Map
   "ConnectWithSL": " Wanna Join? Type \u0004connect {0}\u0001 in console\u0004!", // {0} - Server IP
+  "NoPerms": "\u0007You don't have needed permissions to use this command: {0}" // {0} - Permissions from config
 }
