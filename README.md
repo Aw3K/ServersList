@@ -37,13 +37,13 @@ Commands:
   
 (css_/!)serverslist \<OPTION\> \<ARGUMENTS\>
 
-BASIC OPTIONS:
+BASIC OPTIONS: (Needed BasicPermissions to use)
 
 -  \<HELP\> - displays list of commands
 -  \<INFO\> - displays information about plugin such as version/database/permissions
 -  \<RSERVERS\> - run async task for servers reload from database
 
-ROOT OPTIONS:
+ROOT OPTIONS: (Needed BasicPermissions AND RootPermissions to use)
 
 -  \<LIST\> - gathers and displays raw data about servers from database
 -  \<NAME\> \<"NAME OF SERVER"\> - updates name of current server or inserts row into database if not exist, name must be inside ""
