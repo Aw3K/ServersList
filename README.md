@@ -8,27 +8,16 @@ Configuration:
 
 ```json
 { //cssharp folder/configs/plugins/ServersList/ServersList.json
-  
   "ServerIp": "0.0.0.0", <- Ip of a server plugin will be on, for identification purpose
-  
   "Host": "", <- MySql database host
-  
   "Port": 3306, <- MySql database port
-  
   "User": "", <- MySql database user
-  
   "Pass": "", <- MySql database users password
-  
   "dBName": "", <- MySql database name
-  
   "TableName": "serverslist_servers", <- MySql database table name
-  
   "BasicPermissions": "@css/ban", <- cssharp permissions flags for access to basic plugin commands
-  
   "RootPermissions": "@css/root", <- cssharp permissions flags for access to advanced plugin commands, watch out who You give access to
-  
   "ConfigVersion": 1
-  
 }
 ```
 
