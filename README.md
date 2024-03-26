@@ -7,22 +7,26 @@ You can use existing table, but must include needed columns for it to work. A lo
 Configuration:
 
 { //cssharp folder/configs/plugins/ServersList/ServersList.json
-
-  "ConfigVersion": 1,
   
   "ServerIp": "0.0.0.0", <- Ip of a server plugin will be on, for identification purpose
   
-  "Host": "",
+  "Host": "", <- MySql database host
   
-  "Port": 3306,
+  "Port": 3306, <- MySql database port
   
-  "User": "",
+  "User": "", <- MySql database user
   
-  "Pass": "",
+  "Pass": "", <- MySql database users password
   
-  "dBName": "",
+  "dBName": "", <- MySql database name
   
-  "TableName": "serverslist_servers"
+  "TableName": "serverslist_servers", <- MySql database table name
+  
+  "BasicPermissions": "@css/ban", <- cssharp permissions flags for access to basic plugin commands
+  
+  "RootPermissions": "@css/root", <- cssharp permissions flags for access to advanced plugin commands, watch out who You give access to
+  
+  "ConfigVersion": 1
   
 }
 
@@ -32,12 +36,25 @@ In database theres column "max_players_offset", you can set value there that wil
 
 Servers must be added in database, only name and ip must be set, id should be generated automatically and other values will be set by plugin.
 
+As of v1.1.0, theres now an option for inserting server into database using commands, same as deleting or changing offset. Look commands below.
+
 All lines outputted by plugin can be set in langs, instructions on how to do it are in project as file, including logo, colors and more.
 
 Commands:
 
-- css_servers/css_serwery <name> <- searches for specyfic servers or displays whole list if no argument is set
-- css_serverslist <INFO|RELOAD> <- displays info about plugin (version, server identifier as id from database/-1 if couldn't be found, database connection) / reloads configuration
+- css_servers/css_serwery <name> <- searches for specyfic servers or displays whole list if no argument is set, no permission needed for it to use
+  
+(css_/!)serverslist <OPTION> <ARGUMENTS>
+-  BASIC OPTIONS:
+-  <HELP> - displays list of commands
+-  <INFO> - displays information about plugin such as version/database/permissions
+-  <RSERVERS> - run async task for servers reload from database
+-  ROOT OPTIONS:
+-  <LIST> - gathers and displays raw data about servers from database
+-  <NAME> <"NAME OF SERVER"> - updates name of current server or inserts row into database if not exist, name must be inside ""
+-  <DELETE> <SERVER ID> - deletes record of server from database with a given id
+-  <OFFSET> <SERVER ID> <NEW VALUE> - change value of max_players_offset in database at given server id
+-  <RELOAD> - reloads plugin configuration, hooks again to server id
 
 Example how list will look like after typing css_servers | !servers
 
