@@ -45,11 +45,15 @@ Commands:
 - css_servers/css_serwery <name> <- searches for specyfic servers or displays whole list if no argument is set, no permission needed for it to use
   
 (css_/!)serverslist \<OPTION\> \<ARGUMENTS\>
+
 BASIC OPTIONS:
+
 -  \<HELP\> - displays list of commands
 -  \<INFO\> - displays information about plugin such as version/database/permissions
 -  \<RSERVERS\> - run async task for servers reload from database
+
 ROOT OPTIONS:
+
 -  \<LIST\> - gathers and displays raw data about servers from database
 -  \<NAME\> \<"NAME OF SERVER"\> - updates name of current server or inserts row into database if not exist, name must be inside ""
 -  \<DELETE\> \<SERVER ID\> - deletes record of server from database with a given id
