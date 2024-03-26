@@ -6,6 +6,7 @@ You can use existing table, but must include needed columns for it to work. A lo
 
 Configuration:
 
+```json
 { //cssharp folder/configs/plugins/ServersList/ServersList.json
   
   "ServerIp": "0.0.0.0", <- Ip of a server plugin will be on, for identification purpose
@@ -29,6 +30,7 @@ Configuration:
   "ConfigVersion": 1
   
 }
+```
 
 On map load plugin will save info about max players, most of servers owners will set it more than available slots in tt/ct so you can change it per server.
 
