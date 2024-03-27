@@ -66,7 +66,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 
     #region Commands
     [ConsoleCommand("css_serverslist", "ServersList command for admins to manage.")]
-    [CommandHelper(minArgs: 1, usage: "Basic: <INFO|RSERVERS|HELP> Root: <LIST|NAME|DELETE|OFFSET|RELOAD>", whoCanExecute: CommandUsage.CLIENT_AND_SERVER)]
+    [CommandHelper(minArgs: 1, usage: "Basic: INFO|RSERVERS|HELP Root: LIST|NAME|DELETE|OFFSET|RELOAD", whoCanExecute: CommandUsage.CLIENT_AND_SERVER)]
     public void OnServersListCommand(CCSPlayerController? player, CommandInfo command)
     {
         if (!AdminManager.PlayerHasPermissions(player, Config.BasicPermissions))
@@ -110,15 +110,15 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
             command.ReplyToCommand($"[\u0004ServersList\u0001] Help");
             command.ReplyToCommand($" (css_/!)serverslist <OPTION> <ARGUMENTS>");
             command.ReplyToCommand($" \u0004BASIC OPTIONS\u0001:");
-            command.ReplyToCommand($" \u0004<HELP> \u0001- displays this information");
-            command.ReplyToCommand($" \u0004<INFO> \u0001- displays information about plugin such as version/database/permissions");
-            command.ReplyToCommand($" \u0004<RSERVERS> \u0001- run async task for servers reload from database");
+            command.ReplyToCommand($" \u0004HELP \u0001- displays this information");
+            command.ReplyToCommand($" \u0004INFO \u0001- displays information about plugin such as version/database/permissions");
+            command.ReplyToCommand($" \u0004RSERVERS \u0001- run async task for servers reload from database");
             command.ReplyToCommand($" \u0004ROOT OPTIONS\u0001:");
-            command.ReplyToCommand($" \u0004<LIST> \u0001- gathers and displays raw data about servers from database");
-            command.ReplyToCommand($" \u0004<NAME> <\"NAME OF SERVER\"> \u0001- updates name of current server or inserts row into database if not exist, name must be inside \"\"");
-            command.ReplyToCommand($" \u0004<DELETE> <SERVER ID> \u0001- deletes record of server from database with a given id");
-            command.ReplyToCommand($" \u0004<OFFSET> <SERVER ID> <NEW VALUE> \u0001- change value of max_players_offset in database at given server id");
-            command.ReplyToCommand($" \u0004<RELOAD> \u0001- reloads plugin configuration, hooks again to server id");
+            command.ReplyToCommand($" \u0004LIST \u0001- gathers and displays raw data about servers from database");
+            command.ReplyToCommand($" \u0004NAME <\"NAME OF SERVER\"> \u0001- updates name of current server or inserts row into database if not exist, name must be inside \"\"");
+            command.ReplyToCommand($" \u0004DELETE <SERVER ID> \u0001- deletes record of server from database with a given id");
+            command.ReplyToCommand($" \u0004OFFSET <SERVER ID> <NEW VALUE> \u0001- change value of max_players_offset in database at given server id");
+            command.ReplyToCommand($" \u0004RELOAD \u0001- reloads plugin configuration, hooks again to server id");
             command.ReplyToCommand($"[/\u0004ServersList\u0001]");
             return;
         }
