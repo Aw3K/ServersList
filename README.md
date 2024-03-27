@@ -37,19 +37,19 @@ Commands:
   
 (css_/!)serverslist \<OPTION\> \<ARGUMENTS\>
 
-BASIC OPTIONS:
+BASIC OPTIONS: (Needs BasicPermissions to use)
 
--  \<HELP\> - displays list of commands
--  \<INFO\> - displays information about plugin such as version/database/permissions
--  \<RSERVERS\> - run async task for servers reload from database
+-  HELP - displays list of commands
+-  INFO - displays information about plugin such as version/database/permissions
+-  RSERVERS - run async task for servers reload from database
 
-ROOT OPTIONS:
+ROOT OPTIONS: (Needs BasicPermissions AND RootPermissions to use)
 
--  \<LIST\> - gathers and displays raw data about servers from database
--  \<NAME\> \<"NAME OF SERVER"\> - updates name of current server or inserts row into database if not exist, name must be inside ""
--  \<DELETE\> \<SERVER ID\> - deletes record of server from database with a given id
--  \<OFFSET\> \<SERVER ID\> \<NEW VALUE\> - change value of max_players_offset in database at given server id
--  \<RELOAD\> - reloads plugin configuration, hooks again to server id
+-  LIST - gathers and displays raw data about servers from database
+-  NAME \<"NAME OF SERVER"\> - updates name of current server or inserts row into database if not exist, name must be inside ""
+-  DELETE \<SERVER ID\> - deletes record of server from database with a given id
+-  OFFSET \<SERVER ID\> \<NEW VALUE\> - change value of max_players_offset in database at given server id
+-  RELOAD - reloads plugin configuration, hooks again to server id
 
 Example how list will look like after typing css_servers | !servers
 
