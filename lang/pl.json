@@ -1,13 +1,13 @@
 {
-  "LOGO": "\u2029\u0020\u0020\u0004HS\u0006MAN\u0005IA\u0001.net\u2029",
-  "DatabaseError": "\u0020\u0007Błąd podczas łączenia się z bazą danych.",
-  "NotFoundAny": "\u0020\u0007Nie znaleziono żadnych pasujących serwerów.",
+  "LOGO": " \u2029\u0020\u0020\u0004HS\u0006MAN\u0005IA\u0001.net\u2029",
+  "DatabaseError": " \u0020\u0007Błąd podczas łączenia się z bazą danych.",
+  "NotFoundAny": " \u0020\u0007Nie znaleziono żadnych pasujących serwerów.",
   "InfoOwn": " \u0007 Nie możesz pobrać informacji o serwerze na którym obecnie jesteś. Jak potrzebujesz IP, trzymaj: \u0001{0}",
   "OFFLINE": " \u0004|> \u0001{0} \u0004| \u0007 OFFLINE",
-  "DatabaseErrList": "\u0020\u0004|> \u0001{0} \u0004| \u0007Nie można zczytać statusu.",
+  "DatabaseErrList": " \u0020\u0004|> \u0001{0} \u0004| \u0007Nie można zczytać statusu.",
   "MultipleOutFL": " \u0004|> \u0001{0} \u0004| \u0001<-- Jesteś tutaj --> \u0004| \u0001{1}",
-  "MultipleOutSL": " \u0004|> \u0001{0} \u0004| ONLINE \u0001[\u000C{1}\u0001] Gracze\u0004: \u000C{2}\u0004/\u000C{3}\u0004| \u0001{4}",
-  "ConnectWithFL": " \u0004|> \u0001{0} \u0004| ONLINE \u0001 Gracze\u0004: \u000C{1}\u0004/\u000C{2}\u0020\u0004|\u0020\u000C{3}",
+  "MultipleOutSL": " \u0004|> \u0001{0} \u0004| ONLINE \u0001[\u000C{1}\u0001] \u000C{2}\u0004/\u000C{3}\u0004 | \u0001{4}",
+  "ConnectWithFL": " \u0004|> \u0001{0} \u0004| ONLINE \u000C{1}\u0004/\u000C{2}\u0020\u0004 |\u0020\u000C{3}",
   "ConnectWithSL": " Chcesz dołączyć? Wpisz \u0004connect {0}\u0001 w konsoli\u0004!",
-  "NoPerms": "\u0007Nie masz wymaganej permisji by użyć tej komendy: {0}"
+  "NoPerms": " \u0007Nie masz wymaganej permisji by użyć tej komendy: {0}"
 }

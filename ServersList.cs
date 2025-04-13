@@ -28,36 +28,32 @@ public class ServerInstance {
 
 public class ServersListConfig : BasePluginConfig
 {
-    [JsonPropertyName("ServerIp")] public string ServerIp { get; set; } = "0.0.0.0";
-    [JsonPropertyName("Host")] public string Host { get; set; } = "127.0.0.1";
-    [JsonPropertyName("Port")] public int Port { get; set; } = 3306;
-    [JsonPropertyName("User")] public string User { get; set; } = "";
-    [JsonPropertyName("Pass")] public string Pass { get; set; } = "";
-    [JsonPropertyName("dBName")] public string dBName { get; set; } = "";
+    [JsonPropertyName("DatabaseCredentials")] public string DatabaseCredentials { get; set; } = "/home/container/game/csgo/addons/counterstrikesharp/configs/database.json";
+    [JsonPropertyName("ServerIdFile")] public string ServerIdFile { get; set; } = "/home/container/game/csgo/addons/counterstrikesharp/configs/id.json";
     [JsonPropertyName("TableName")] public string TableName { get; set; } = "serverslist_servers";
     [JsonPropertyName("BasicPermissions")] public string BasicPermissions { get; set; } = "@css/ban";
     [JsonPropertyName("RootPermissions")] public string RootPermissions { get; set; } = "@css/root";
 }
 
-public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
+public partial class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 {
-    public override string ModuleName => " ServersList";
+    public override string ModuleName => "ServersList";
     public override string ModuleAuthor => "NyggaBytes";
-    public override string ModuleVersion => "1.1.1";
+    public override string ModuleVersion => "1.1.3";
     public override string ModuleDescription => "";
-    public ILogger? logger;
     public ServersListConfig Config { get; set; } = new();
-    
-    public int serverIdentifier = -1;
 
-    private string? connectionString;
     private List<ServerInstance>? Servers = new List<ServerInstance>();
 
     public override void Load(bool hotReload)
     {
-        logger = Logger;
-        logger.LogInformation($"Plugin version: {ModuleVersion}");
-        if (serverIdentifier > 0) logger.LogInformation($"Loaded plugin, hooked to id: {serverIdentifier}");
+        Logger.LogInformation($"Plugin version: {ModuleVersion}");
+        Task.Run(async () => {
+            await LoadDatabaseCredentialsAsync();
+            await LoadServerIDAsync();
+            await CheckAndPrepare();
+        }).Wait();
+        if (serverIdentifier > 0) Logger.LogInformation($"Loaded plugin, hooked to id: {serverIdentifier}");
 
         loadServers();
         RegisterListener<Listeners.OnServerPreFatalShutdown>(setShutdownInDataBase);
@@ -66,7 +62,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 
     #region Commands
     [ConsoleCommand("css_serverslist", "ServersList command for admins to manage.")]
-    [CommandHelper(minArgs: 1, usage: "Basic: INFO|RSERVERS|HELP Root: LIST|NAME|DELETE|OFFSET|RELOAD", whoCanExecute: CommandUsage.CLIENT_AND_SERVER)]
+    [CommandHelper(minArgs: 1, usage: "Basic: INFO|RSERVERS|HELP Root: LIST|EDIT|DELETE|OFFSET|RELOAD", whoCanExecute: CommandUsage.CLIENT_AND_SERVER)]
     public void OnServersListCommand(CCSPlayerController? player, CommandInfo command)
     {
         if (!AdminManager.PlayerHasPermissions(player, Config.BasicPermissions))
@@ -83,7 +79,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
             command.ReplyToCommand($" \u0004Servers loaded\u0001: {Servers!.Count()}");
             try
             {
-                using var _connection = new MySqlConnection(connectionString);
+                using var _connection = new MySqlConnection(ConnectionString);
                 _connection.Open();
                 command.ReplyToCommand($" \u0004Database connection\u0001: {_connection.State.ToString()}");
                 _connection.Close();
@@ -115,7 +111,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
             command.ReplyToCommand($" \u0004RSERVERS \u0001- run async task for servers reload from database");
             command.ReplyToCommand($" \u0004ROOT OPTIONS\u0001:");
             command.ReplyToCommand($" \u0004LIST \u0001- gathers and displays raw data about servers from database");
-            command.ReplyToCommand($" \u0004NAME <\"NAME OF SERVER\"> \u0001- updates name of current server or inserts row into database if not exist, name must be inside \"\"");
+            command.ReplyToCommand($" \u0004EDIT <\"IP OF SERVER\"> <\"NAME OF SERVER\"> \u0001- updates ip and name of current server or inserts row into database if not exist, name and ip must be inside \"\"");
             command.ReplyToCommand($" \u0004DELETE <SERVER ID> \u0001- deletes record of server from database with a given id");
             command.ReplyToCommand($" \u0004OFFSET <SERVER ID> <NEW VALUE> \u0001- change value of max_players_offset in database at given server id");
             command.ReplyToCommand($" \u0004RELOAD \u0001- reloads plugin configuration, hooks again to server id");
@@ -133,68 +129,52 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
             if (command.ArgByIndex(1) == "RELOAD" || command.ArgByIndex(1) == "reload")
             {
                 OnConfigParsed(ConfigManager.Load<ServersListConfig>("ServersList"));
+                Task.Run(async () => {
+                    await LoadDatabaseCredentialsAsync();
+                    await LoadServerIDAsync();
+                    await CheckAndPrepare();
+                }).Wait();
                 command.ReplyToCommand($"[\u0004ServersList\u0001] Reloading");
-                if (serverIdentifier > 0) command.ReplyToCommand($" \u0004Reloaded plugin, hooked to id: \u0007{serverIdentifier}");
-                else command.ReplyToCommand($" \u0004Reloaded plugin, but \u0007couldn't hook to any id\u0004, check configuration and if specified server is present in database, to add this server use command: (css_/!)serverslist name \"NAME OF SERVER\"");
-                command.ReplyToCommand($" \u0004Server Ip from config\u0001: {Config.ServerIp}");
+                if (serverIdentifier > 0) {
+                    command.ReplyToCommand($" \u0004Reloaded plugin, hooked to id: \u0007{serverIdentifier}");
+                    loadServers();
+                }
+                else command.ReplyToCommand($" \u0004Reloaded plugin, but \u0007couldn't hook to any id\u0004, check configuration and if specified server is present in database, to add this server use command: (css_/!)serverslist edit");
                 command.ReplyToCommand($"[/\u0004ServersList\u0001]");
                 return;
             }
 
-            if (command.ArgByIndex(1) == "NAME" || command.ArgByIndex(1) == "name")
+            if (command.ArgByIndex(1) == "EDIT" || command.ArgByIndex(1) == "edit")
             {
-                if (command.ArgCount != 3) { command.ReplyToCommand($" \u0004usage\u0001: (css_/!)serverslist name \"NAME OF SERVER\""); return; }
-                else if (command.ArgCount == 3)
+                if (command.ArgCount != 4) { command.ReplyToCommand($" \u0004usage\u0001: (css_/!)serverslist edit \"IP OF SERVER\" \"NAME OF SERVER\""); return; }
+                else if (command.ArgCount == 4)
                 {
-                    if (Config.ServerIp.Length < 1 || Config.ServerIp == "0.0.0.0") { command.ReplyToCommand(" \u0007Empty or default server ip set in config, set proper one and reload plugin."); return; }
+                    var ip = command.ArgByIndex(2);
+                    var name = command.ArgByIndex(3);
+                    if (ip.Length < 1 || name.Length < 1) {
+                        command.ReplyToCommand(" \u0007Too short name/ip.");
+                        return;
+                    }
+                    if (serverIdentifier <= 0) {
+                        command.ReplyToCommand(" \u0007Can't edit/insert server data, serverIdentifier is not hooked to any server.");
+                        return;
+                    }
                     try
                     {
-                        using var _connection = new MySqlConnection(connectionString);
+                        using var _connection = new MySqlConnection(ConnectionString);
                         _connection.Open();
-                        using var querry = new MySqlCommand($"SELECT `id`,`ip` FROM `{Config.TableName}` WHERE `ip` = '{Config.ServerIp}'", _connection);
-                        using var result = querry.ExecuteReader();
-                        if (result.Read())
-                        {
-                            try
-                            {
-                                using var _connectionUpdate = new MySqlConnection(connectionString);
-                                _connectionUpdate.Open();
-                                using var querryUpdate = new MySqlCommand($"UPDATE `{Config.TableName}` SET `name` = @name WHERE `ip` = '{Config.ServerIp}';", _connectionUpdate);
-                                querryUpdate.Parameters.AddWithValue("name", command.ArgByIndex(2));
-                                var resultUpdate = querryUpdate.ExecuteNonQuery();
-                                if (resultUpdate != 1) command.ReplyToCommand($" \u0007Error in function ServersListCommandNamUpdate, {resultUpdate} rows affected instead of 1.");
-                                else if (resultUpdate == 1) command.ReplyToCommand($" \u0004Successfully updated name of current server.");
-                                _connectionUpdate.Close();
-                            }
-                            catch (MySqlException exUpdate)
-                            {
-                                command.ReplyToCommand($"Could not create instance of MySqlConnection, error: '\u0007{exUpdate.Message}\u0001'. Operation will not happen: 'ServersListCommandNameUpdate'");
-                            }
-                        }
-                        else
-                        {
-                            try
-                            {
-                                using var _connectionInsert = new MySqlConnection(connectionString);
-                                _connectionInsert.Open();
-                                using var querryInsert = new MySqlCommand($"INSERT INTO `{Config.TableName}` (`ip`,`name`) VALUES (@ip,@name);", _connectionInsert);
-                                querryInsert.Parameters.AddWithValue("ip", Config.ServerIp);
-                                querryInsert.Parameters.AddWithValue("name", command.ArgByIndex(2));
-                                var resultInsert = querryInsert.ExecuteNonQuery();
-                                if (resultInsert != 1) command.ReplyToCommand($" \u0007Error in function ServersListCommandNameInsert, {resultInsert} rows affected instead of 1.");
-                                else if (resultInsert == 1) command.ReplyToCommand($" \u0004Successfully inserted record with current ip and name. Reload plugin.");
-                                _connectionInsert.Close();
-                            }
-                            catch (MySqlException exInsert)
-                            {
-                                command.ReplyToCommand($"Could not create instance of MySqlConnection, error: '\u0007{exInsert.Message}\u0001'. Operation will not happen: 'ServersListCommandNameInsert'");
-                            }
-                        }
+                        using var querryUpdate = new MySqlCommand($"INSERT INTO `{Config.TableName}`(`id`, `ip`, `name`) VALUES (@id,@ip,@name) ON DUPLICATE KEY UPDATE `ip`=VALUES(`ip`),`name`=VALUES(`name`);", _connection);
+                        querryUpdate.Parameters.AddWithValue("id", serverIdentifier);
+                        querryUpdate.Parameters.AddWithValue("ip", command.ArgByIndex(2));
+                        querryUpdate.Parameters.AddWithValue("name", command.ArgByIndex(3));
+                        var resultUpdate = querryUpdate.ExecuteNonQuery();
+                        if (resultUpdate != 1) command.ReplyToCommand($" \u0007Error in function ServersListCommandEditUpdate, {resultUpdate} rows affected instead of 1.");
+                        else if (resultUpdate == 1) command.ReplyToCommand($" \u0004Successfully updated ip and name of current server.");
                         _connection.Close();
                     }
-                    catch (MySqlException ex)
+                    catch (MySqlException exUpdate)
                     {
-                        command.ReplyToCommand($"Could not create instance of MySqlConnection, error: '\u0007{ex.Message}\u0001'. Operation will not happen: 'ServersListCommandName'");
+                        command.ReplyToCommand($"Could not create instance of MySqlConnection, error: '\u0007{exUpdate.Message}\u0001'. Operation will not happen: 'ServersListCommandEditUpdate'");
                     }
                 }
                 return;
@@ -207,7 +187,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                 {
                     try
                     {
-                        using var _connection = new MySqlConnection(connectionString);
+                        using var _connection = new MySqlConnection(ConnectionString);
                         _connection.Open();
                         using var querry = new MySqlCommand($"SELECT `id` FROM `{Config.TableName}` WHERE `id` = @id;", _connection);
                         querry.Parameters.AddWithValue("id", command.ArgByIndex(2));
@@ -216,7 +196,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                         {
                             try
                             {
-                                using var _connectionDelete = new MySqlConnection(connectionString);
+                                using var _connectionDelete = new MySqlConnection(ConnectionString);
                                 _connectionDelete.Open();
                                 using var querryDelete = new MySqlCommand($"DELETE FROM `{Config.TableName}` WHERE `id` = @id;", _connectionDelete);
                                 querryDelete.Parameters.AddWithValue("id", command.ArgByIndex(2));
@@ -244,21 +224,20 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
             if (command.ArgByIndex(1) == "LIST" || command.ArgByIndex(1) == "list")
             {
                 string mysqlQuery = $"SELECT `id`,`ip`,`name`,`active_players`,`max_players`,`max_players_offset`,`map_name` FROM `{Config.TableName}`;";
-                Task.Run(async () =>{
-                    await Server.NextFrameAsync(() => {
+                Task.Run(async () => {
+                    Server.NextFrame(() => {
                         command.ReplyToCommand($"[\u0004ServersList\u0001] List");
                         command.ReplyToCommand("\u0004|> \u0001id \u0004| \u0001ip \u0004| \u0001name \u0004| \u0001active_players \u0004| \u0001max_players \u0004| \u0001max_players_offset \u0004| \u0001map_name");
                     });
                     try
                     {
-                        using var _connection = new MySqlConnection(connectionString);
-                        await _connection.OpenAsync();
+                        using var _connection = await ConnectAsync();
                         using var querry = new MySqlCommand(mysqlQuery, _connection);
                         await using var result = await querry.ExecuteReaderAsync();
                         while (await result.ReadAsync())
                         {
                             var output = $"\u0004|> \u0001{result.GetInt32(0)} \u0004| \u0001{result.GetString(1)} \u0004| \u0001{result.GetString(2)} \u0004| \u0001{result.GetInt32(3)} \u0004| \u0001{result.GetInt32(4)} \u0004| \u0001{result.GetInt32(5)} \u0004| \u0001{result.GetString(6)}";
-                            await Server.NextFrameAsync(() => {
+                            Server.NextFrame(() => {
                                 command.ReplyToCommand(output);
                             });
                         }
@@ -266,11 +245,11 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                     }
                     catch (MySqlException ex)
                     {
-                        await Server.NextFrameAsync(() => {
+                        Server.NextFrame(() => {
                             command.ReplyToCommand($"Could not create instance of MySqlConnection, error: '\u0007{ex.Message}\u0001'. Operation will not happen: 'ServersListCommandList'");
                         });
                     }
-                    await Server.NextFrameAsync(() => {
+                    Server.NextFrame(() => {
                         command.ReplyToCommand($"[/\u0004ServersList\u0001]");
                     });
                 });
@@ -284,7 +263,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                 {
                     try
                     {
-                        using var _connection = new MySqlConnection(connectionString);
+                        using var _connection = new MySqlConnection(ConnectionString);
                         _connection.Open();
                         using var querry = new MySqlCommand($"SELECT `id` FROM `{Config.TableName}` WHERE `id` = @id;", _connection);
                         querry.Parameters.AddWithValue("id", command.ArgByIndex(2));
@@ -295,7 +274,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                             {
                                 if (int.TryParse(command.ArgByIndex(3), out int offset))
                                 {
-                                    using var _connectionSet = new MySqlConnection(connectionString);
+                                    using var _connectionSet = new MySqlConnection(ConnectionString);
                                     _connectionSet.Open();
                                     using var querrySet = new MySqlCommand($"UPDATE `{Config.TableName}` SET `max_players_offset` = @offset WHERE `id` = @id;", _connectionSet);
                                     querrySet.Parameters.AddWithValue("offset", offset);
@@ -336,7 +315,7 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         if (command.ArgString != "")
         {
             List<ServerInstance> founded = Servers!.FindAll(
-                delegate(ServerInstance e) { return e.name.ToLower().Contains(command.ArgString.ToLower()); }
+                delegate(ServerInstance e) { return e.name.ToLower().Contains(command.ArgString.ToLower()) || e.mapName.ToLower().Contains(command.ArgString.ToLower()); }
             );
             if (founded.Count() < 1) command.ReplyToCommand(Localizer["NotFoundAny"]);
             else if (founded.Count() == 1)
@@ -372,6 +351,13 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         return HookResult.Continue;
     }
     [GameEventHandler(HookMode.Post)]
+    public HookResult OnPlayerConnectFull(EventPlayerConnectFull @event, GameEventInfo @info)
+    {
+        loadServers();
+        setPlayerCount(ActivePlayersCount());
+        return HookResult.Continue;
+    }
+    [GameEventHandler(HookMode.Post)]
     public HookResult OnRoundPrestart(EventRoundStart @event, GameEventInfo info)
     {
         loadServers();
@@ -394,35 +380,34 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         Task.Run(async () => {
             try
             {
-                using var _connection = new MySqlConnection(connectionString);
+                using var _connection = new MySqlConnection(ConnectionString);
                 await _connection.OpenAsync();
                 await using var querry = new MySqlCommand(mysqlQuery, _connection);
                 var result = await querry.ExecuteNonQueryAsync();
-                if (result != 1) logger?.LogError($"Error in function setPlayerCountAndMapStartu, {result} rows affected instead of 1.");
+                if (result != 1) Logger?.LogError($"Error in function setPlayerCountAndMapStartu, {result} rows affected instead of 1.");
                 await _connection.CloseAsync();
             }
             catch (MySqlException ex)
             {
-                logger?.LogError($"Could not create instance of MySqlConnection, error: '{ex.Message}'. Operation will not happen: 'setPlayerCountAndMapStartup'");
+                Logger?.LogError($"Could not create instance of MySqlConnection, error: '{ex.Message}'. Operation will not happen: 'setPlayerCountAndMapStartup'");
             }
         });
     }
     private void setPlayerCount(int playerCount)
     {
-        if (serverIdentifier == -1) return;
+        if (serverIdentifier <= 0) return;
         string mysqlQuery = $"UPDATE `{Config.TableName}` SET `active_players` = '{playerCount}' WHERE `id` = '{serverIdentifier}';";
         Task.Run(async () => {
             try {
-                using var _connection = new MySqlConnection(connectionString);
-                await _connection.OpenAsync();
+                using var _connection = await ConnectAsync();
                 await using var querry = new MySqlCommand(mysqlQuery, _connection);
                 var result = await querry.ExecuteNonQueryAsync();
-                if (result != 1) logger?.LogError($"Error in function setPlayerCount, {result} rows affected instead of 1.");
+                if (result != 1) Logger?.LogError($"Error in function setPlayerCount, {result} rows affected instead of 1.");
                 await _connection.CloseAsync();
             }
             catch (MySqlException ex)
             {
-                logger?.LogError($"Could not create instance of MySqlConnection, error: '{ex.Message}'. Operation will not happen: 'setPlayerCount{playerCount}'");
+                Logger?.LogError($"Could not create instance of MySqlConnection, error: '{ex.Message}'. Operation will not happen: 'setPlayerCount{playerCount}'");
             }
         });
     }
@@ -431,16 +416,16 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         string mysqlQuery = $"UPDATE `{Config.TableName}` SET `active_players` = '-1' WHERE `id` = '{serverIdentifier}';";
         try
         {
-            using var _connection = new MySqlConnection(connectionString);
+            using var _connection = new MySqlConnection(ConnectionString);
             _connection.Open();
             using var querry = new MySqlCommand(mysqlQuery, _connection);
             var result = querry.ExecuteNonQuery();
-            if (result != 1) logger?.LogError($"Error in function setShutdownInDataBase, {result} rows affected instead of 1.");
+            if (result != 1) Logger?.LogError($"Error in function setShutdownInDataBase, {result} rows affected instead of 1.");
             _connection.Close();
         }
         catch (MySqlException ex)
         {
-            logger?.LogError($"Could not create instance of MySqlConnection, error: '{ex.Message}'. Operation will not happen: 'setShutdownInDataBase'");
+            Logger?.LogError($"Could not create instance of MySqlConnection, error: '{ex.Message}'. Operation will not happen: 'setShutdownInDataBase'");
         }
     }
 
@@ -451,104 +436,62 @@ public class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
                && !p.IsHLTV
                && !p.IsBot
                && p.Connected == PlayerConnectedState.PlayerConnected
-               && p.SteamID.ToString().Length == 17
-               && (p.Team == CsTeam.Terrorist || p.Team == CsTeam.CounterTerrorist))).Count();
+               && p.SteamID.ToString().Length == 17)).Count();
     }
 
     private void loadServers()
     {
         string mysqlQuery = $"SELECT `id`,`ip`,`name`,`active_players`,`max_players`,`max_players_offset`,`map_name` FROM `{Config.TableName}`;";
         Task.Run(async () => {
-            if (serverIdentifier != -1)
+            if (serverIdentifier > 0)
             {
-                Servers!.Clear();
+                List<ServerInstance> tmp = new List<ServerInstance>();
                 try
                 {
-                    using var _connection = new MySqlConnection(connectionString);
-                    await _connection.OpenAsync();
+                    using var _connection = await ConnectAsync();
                     using var querry = new MySqlCommand(mysqlQuery, _connection);
                     await using var result = await querry.ExecuteReaderAsync();
                     while (await result.ReadAsync())
                     {
                         ServerInstance instance = new ServerInstance(result.GetInt32(0), result.GetString(1), result.GetString(2), result.GetInt32(3), result.GetInt32(4), result.GetInt32(5), result.GetString(6));
-                        Servers.Add(instance);
+                        tmp.Add(instance);
                     }
-                    if (Servers.Count() < 1) Server.NextFrame(() => { logger?.LogWarning($"Did not reload any servers from database."); });
-                    else Server.NextFrame(() => { logger?.LogInformation($"Reloaded info about {Servers.Count()} servers from database."); });
+                    if (tmp.Count() < 1) Server.NextFrame(() => { Logger?.LogWarning($"Did not reload any servers from database."); });
                     await _connection.CloseAsync();
+                    Servers = tmp;
                 }
                 catch (MySqlException ex)
                 {
-                    logger?.LogError($"Could not create instance of MySqlConnection, error: '{ex.Message}'. Operation will not happen: 'loadServers'");
+                    Logger?.LogError($"Could not create instance of MySqlConnection, error: '{ex.Message}'. Operation will not happen: 'loadServers'");
                 }
-            } else logger?.LogWarning($"Could not reload servers becouse serverIdentifier is not hokked to any server.");
+            } else Logger?.LogWarning($"Could not reload servers becouse serverIdentifier is not set.");
         });
     }
 
     public void OnConfigParsed(ServersListConfig config)
     {
-        logger = Logger;
         Config = config;
         if (Config.RootPermissions.Length < 1) {
             Config.RootPermissions = "@css/root";
-            logger.LogWarning($"RootPermissions not set in the config, defaulting to '@css/root'");
+            Logger.LogWarning($"RootPermissions not set in the config, defaulting to '@css/root'");
         }
         if (Config.BasicPermissions.Length < 1) {
             Config.BasicPermissions = "@css/ban";
-            logger.LogWarning($"BasicPermissions not set in the config, defaulting to '@css/ban'");
+            Logger.LogWarning($"BasicPermissions not set in the config, defaulting to '@css/ban'");
         }
-        if (Config.TableName.Length < 1) {
+        if (Config.TableName.Length < 3) {
             Config.TableName = "serverslist_servers";
-            logger.LogWarning($"Database Table Name not set in the config, defaulting to 'serverslist_servers'");
+            Logger.LogWarning($"Database Table Name not set in the config, defaulting to 'serverslist_servers'");
         }
-        connectionString = $"Server={Config.Host};Port={Config.Port};User ID={Config.User};Password={Config.Pass};Database={Config.dBName}";
-        string mysqlQuery = $"SELECT `id` FROM `{Config.TableName}` WHERE `ip` = '{MySqlHelper.EscapeString(Config.ServerIp)}';";
-        string mysqlCreateTableQuery = $"CREATE TABLE IF NOT EXISTS {Config.TableName} (id INT PRIMARY KEY AUTO_INCREMENT, ip  VARCHAR(64), name VARCHAR(64), map_name VARCHAR(64) DEFAULT 'null', active_players INT DEFAULT -1, max_players INT DEFAULT 0, max_players_offset INT DEFAULT 0); ALTER TABLE {Config.TableName} AUTO_INCREMENT=1;";
-        if (Config.ServerIp.Length == 0)
+        if (Config.ServerIdFile.Length < 1)
         {
-            serverIdentifier = -1;
-            logger.LogCritical("ServerIp specified in the config is empty. Plugin won't work.");
+            Config.ServerIdFile = "/home/container/game/csgo/addons/counterstrikesharp/configs/id.json";
+            Logger.LogWarning($"ServerIdFile not set in the config, defaulting to '/home/container/game/csgo/addons/counterstrikesharp/configs/id.json'");
         }
-        else
+        if (Config.DatabaseCredentials.Length < 1)
         {
-            try
-            {
-                using var _connection = new MySqlConnection(connectionString);
-                _connection.Open();
-                using var querry = new MySqlCommand(mysqlQuery, _connection);
-                using var result = querry.ExecuteReader();
-                if (result.Read()) { serverIdentifier = result.GetInt32(0); }
-                else
-                {
-                    serverIdentifier = -1;
-                    logger?.LogCritical("This server ip specified don't exist in the database. Plugin won't work.");
-                }
-                _connection.Close();
-            }
-            catch (MySqlException ex)
-            {
-                if (ex.ErrorCode == MySqlErrorCode.NoSuchTable)
-                {
-                    try
-                    {
-                        using var _connection = new MySqlConnection(connectionString);
-                        _connection.Open();
-                        using var querry = new MySqlCommand(mysqlCreateTableQuery, _connection);
-                        querry.ExecuteNonQuery();
-                        logger.LogInformation($"Table not found in database, created one.");
-                        logger.LogInformation($"You need to insert data about servers into database for plugin to work. To add this server use command: (css_/!)serverslist name \"NAME OF SERVER\"");
-                        serverIdentifier = -1;
-                        _connection.Close();
-                    }
-                    catch (MySqlException exCreate) {
-                        logger?.LogError($"Could not create instance of MySqlConnection, error: '{exCreate.Message}'. Operation will not happen: 'OnConfigParsedCreateTableIfNotExist'");
-                    }
-                }
-                else {
-                    serverIdentifier = -1;
-                    logger?.LogError($"Could not create instance of MySqlConnection, error: '{ex.Message}'. Operation will not happen: 'OnConfigParsed'");
-                }
-            }
+            Config.DatabaseCredentials = "/home/container/game/csgo/addons/counterstrikesharp/configs/database.json";
+            Logger.LogWarning($"DatabaseCredentials not set in the config, defaulting to '/home/container/game/csgo/addons/counterstrikesharp/configs/database.json'");
         }
     }
     #endregion
