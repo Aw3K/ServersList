@@ -39,7 +39,7 @@ public partial class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
 {
     public override string ModuleName => "ServersList";
     public override string ModuleAuthor => "NyggaBytes";
-    public override string ModuleVersion => "1.1.3";
+    public override string ModuleVersion => "1.1.3a";
     public override string ModuleDescription => "";
     public ServersListConfig Config { get; set; } = new();
 
@@ -315,7 +315,7 @@ public partial class ServersList : BasePlugin, IPluginConfig<ServersListConfig>
         if (command.ArgString != "")
         {
             List<ServerInstance> founded = Servers!.FindAll(
-                delegate(ServerInstance e) { return e.name.ToLower().Contains(command.ArgString.ToLower()) || e.mapName.ToLower().Contains(command.ArgString.ToLower()); }
+                delegate(ServerInstance e) { return (e.name.Contains(command.ArgString, StringComparison.CurrentCultureIgnoreCase) || e.mapName.Contains(command.ArgString, StringComparison.CurrentCultureIgnoreCase)); }
             );
             if (founded.Count() < 1) command.ReplyToCommand(Localizer["NotFoundAny"]);
             else if (founded.Count() == 1)
